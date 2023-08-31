@@ -1,6 +1,9 @@
 use std::sync::{Arc, RwLock};
 
-use crate::{fork::ForkSource, node::InMemoryNodeInner};
+use crate::{
+    fork::ForkSource,
+    node::{BlockInfo, InMemoryNodeInner},
+};
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
 use zksync_basic_types::U64;
@@ -21,6 +24,15 @@ impl<S> EvmNamespaceImpl<S> {
 
 #[rpc]
 pub trait EvmNamespaceT {
+    /// Force a single block to be mined.
+    ///
+    /// Mines a block independent of whether or not mining is started or stopped. Will mine an empty block if there are no available transactions to mine.
+    ///
+    /// # Returns
+    /// The string "0x0".
+    #[rpc(name = "evm_mine")]
+    fn evm_mine(&self) -> BoxFuture<Result<String>>;
+
     /// Increase the current timestamp for the node
     ///
     /// # Parameters
@@ -45,6 +57,29 @@ pub trait EvmNamespaceT {
 impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
     for EvmNamespaceImpl<S>
 {
+    fn evm_mine(&self) -> BoxFuture<Result<String>> {
+        let inner = Arc::clone(&self.node);
+        Box::pin(async move {
+            match inner.write() {
+                Ok(mut inner_guard) => {
+                    let block = BlockInfo {
+                        batch_number: inner_guard.current_batch,
+                        block_timestamp: inner_guard.current_miniblock,
+                        tx_hash: None,
+                    };
+                    inner_guard.blocks.insert(block.batch_number, block);
+                    {
+                        inner_guard.current_timestamp += 1;
+                        inner_guard.current_batch += 1;
+                        inner_guard.current_miniblock += 1;
+                    }
+                    Ok("0x0".to_string())
+                }
+                Err(_) => Err(into_jsrpc_error(Web3Error::InternalError)),
+            }
+        })
+    }
+
     fn increase_time(&self, time_delta_seconds: U64) -> BoxFuture<Result<U64>> {
         let inner = Arc::clone(&self.node);
 
@@ -64,6 +99,7 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
             }
         })
     }
+
     fn set_time(&self, time: U64) -> BoxFuture<Result<i64>> {
         let inner = Arc::clone(&self.node);
 
@@ -85,8 +121,31 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
 #[cfg(test)]
 mod tests {
     use crate::{http_fork_source::HttpForkSource, node::InMemoryNode};
+    use zksync_core::api_server::web3::backend_jsonrpc::namespaces::eth::EthNamespaceT;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_evm_mine() {
+        let node = InMemoryNode::<HttpForkSource>::default();
+        let evm = EvmNamespaceImpl::new(node.get_inner());
+
+        let start_block = node
+            .get_block_by_number(zksync_types::api::BlockNumber::Latest, true)
+            .await
+            .unwrap()
+            .expect("block exists");
+
+        let result = evm.evm_mine().await.expect("evm_mine");
+        assert_eq!(&result, "0x0");
+
+        let current_block = node
+            .get_block_by_number(zksync_types::api::BlockNumber::Latest, true)
+            .await
+            .unwrap()
+            .expect("block exists");
+        assert_eq!(start_block.number + 1, current_block.number);
+    }
 
     #[tokio::test]
     async fn test_increase_time_zero_value() {
