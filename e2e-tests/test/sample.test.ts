@@ -5,7 +5,7 @@ import { Contract, Wallet } from "zksync-web3";
 import { RichAccounts } from "../helpers/constants";
 import { deployContract } from "../helpers/utils";
 
-describe("Sample Test", function () {
+describe("Sample Test Suite", function () {
   let greeter: Contract;
 
   before("deploying a fresh contract", async function () {
@@ -25,12 +25,11 @@ describe("Sample Test", function () {
     expect(await greeter.greet()).to.equal("Hola, mundo!");
   });
 
-  // Not implemented yet
-  it.skip("Should be able to advance blocks by 1", async function () {
-    const blockNumberBefore = await hre.ethers.provider.getBlockNumber()
-    await hre.ethers.provider.send("evm_mine", [])
-    const blockNumberAfter = await hre.ethers.provider.getBlockNumber()
-    expect(blockNumberAfter).to.equal(blockNumberBefore + 1)
-  })
-  
+  it("Should be able to advance blocks by 2", async function () {
+    const blockNumberBefore = await hre.ethers.provider.getBlockNumber();
+    await hre.ethers.provider.send("evm_mine", []);
+    await hre.ethers.provider.send("evm_mine", []);
+    const blockNumberAfter = await hre.ethers.provider.getBlockNumber();
+    expect(blockNumberAfter).to.equal(blockNumberBefore + 2);
+  });
 });
