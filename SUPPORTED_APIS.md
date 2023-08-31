@@ -74,7 +74,7 @@ The `status` options are:
 | `ETH` | `eth_unsubscribe` | `NOT IMPLEMENTED` | Cancel a subscription to a particular event |
 | `EVM` | `evm_addAccount` | `NOT IMPLEMENTED` | Adds any arbitrary account |
 | `EVM` | `evm_increaseTime` | `SUPPORTED` | Jump forward in time by the given amount of time, in seconds |
-| `EVM` | `evm_mine` | `NOT IMPLEMENTED`<br />[GitHub Issue #67](https://github.com/matter-labs/era-test-node/issues/67) | Force a single block to be mined |
+| `EVM` | `evm_mine` | `SUPPORTED` | Force a single block to be mined |
 | `EVM` | `evm_removeAccount` | `NOT IMPLEMENTED` | Removes an account |
 | `EVM` | `evm_revert` | `NOT IMPLEMENTED`<br />[GitHub Issue #70](https://github.com/matter-labs/era-test-node/issues/70) | Revert the state of the blockchain to a previous snapshot |
 | `EVM` | `evm_setAccountBalance` | `NOT IMPLEMENTED` | Sets the given account's balance to the specified WEI value |
