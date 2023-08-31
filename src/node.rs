@@ -83,12 +83,12 @@ pub const ESTIMATE_GAS_ACCEPTABLE_OVERESTIMATION: u32 = 1_000;
 pub const ESTIMATE_GAS_SCALE_FACTOR: f32 = 1.3;
 
 /// Basic information about the generated block (which is block l1 batch and miniblock).
-/// Currently, this test node supports exactly one transaction per block.
+/// Currently, this test node supports zero or one transactions per block.
 pub struct BlockInfo {
     pub batch_number: u32,
     pub block_timestamp: u64,
     /// Transaction included in this block.
-    pub tx_hash: H256,
+    pub tx_hash: Option<H256>,
 }
 
 /// Information about the executed transaction.
@@ -799,7 +799,7 @@ impl<S: ForkSource + std::fmt::Debug> InMemoryNode<S> {
         let block = BlockInfo {
             batch_number: block_context.block_number,
             block_timestamp: block_context.block_timestamp,
-            tx_hash: l2_tx.hash(),
+            tx_hash: Some(l2_tx.hash()),
         };
 
         // init vm
