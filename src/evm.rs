@@ -2,25 +2,20 @@ use std::sync::{Arc, RwLock};
 
 use crate::{
     fork::ForkSource,
-    node::{BlockInfo, InMemoryNodeInner, L2_GAS_PRICE},
+    node::{BlockInfo, InMemoryNodeInner},
 };
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
 use vm::{
     utils::BLOCK_GAS_LIMIT,
-    vm_with_bootloader::{
-        init_vm_inner, BlockContext, BlockContextMode, BootloaderJobType, TxExecutionMode,
-    },
+    vm_with_bootloader::{init_vm_inner, BlockContextMode, BootloaderJobType, TxExecutionMode},
     HistoryEnabled, OracleTools,
 };
-use zksync_basic_types::{H160, H256, U64};
+use zksync_basic_types::{H256, U64};
 use zksync_core::api_server::web3::backend_jsonrpc::error::into_jsrpc_error;
 use zksync_state::StorageView;
 use zksync_state::WriteStorage;
-use zksync_types::{
-    tx::tx_execution_info::TxExecutionStatus, zk_evm::block_properties::BlockProperties,
-};
-use zksync_utils::{h256_to_u256, u256_to_h256};
+use zksync_utils::u256_to_h256;
 use zksync_web3_decl::error::Web3Error;
 
 /// Implementation of EvmNamespace
@@ -79,21 +74,11 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
                     let (keys, block, bytecodes) = {
                         let mut storage_view = StorageView::new(&inner.fork_storage);
                         let mut oracle_tools = OracleTools::new(&mut storage_view, HistoryEnabled);
+
                         let bootloader_code = &inner.baseline_contracts;
-
-                        let block_context = BlockContext {
-                            block_number: inner.current_batch,
-                            block_timestamp: inner.current_timestamp,
-                            l1_gas_price: inner.l1_gas_price,
-                            fair_l2_gas_price: L2_GAS_PRICE,
-                            operator_address: H160::zero(),
-                        };
-
-                        let block_properties = BlockProperties {
-                            default_aa_code_hash: h256_to_u256(bootloader_code.default_aa.hash),
-                            zkporter_is_available: false,
-                        };
-
+                        let block_context = inner.create_block_context();
+                        let block_properties =
+                            InMemoryNodeInner::<S>::create_block_properties(bootloader_code);
                         let block = BlockInfo {
                             batch_number: block_context.block_number,
                             block_timestamp: block_context.block_timestamp,
@@ -140,7 +125,6 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
                                 .collect(),
                         )
                     }
-                    let current_miniblock = inner.current_miniblock;
                     inner.blocks.insert(block.batch_number, block);
                     {
                         inner.current_timestamp += 1;
