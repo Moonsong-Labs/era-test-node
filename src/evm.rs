@@ -2,12 +2,25 @@ use std::sync::{Arc, RwLock};
 
 use crate::{
     fork::ForkSource,
-    node::{BlockInfo, InMemoryNodeInner},
+    node::{BlockInfo, InMemoryNodeInner, L2_GAS_PRICE},
 };
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
-use zksync_basic_types::U64;
+use vm::{
+    utils::BLOCK_GAS_LIMIT,
+    vm_with_bootloader::{
+        init_vm_inner, BlockContext, BlockContextMode, BootloaderJobType, TxExecutionMode,
+    },
+    HistoryEnabled, OracleTools,
+};
+use zksync_basic_types::{H160, H256, U64};
 use zksync_core::api_server::web3::backend_jsonrpc::error::into_jsrpc_error;
+use zksync_state::StorageView;
+use zksync_state::WriteStorage;
+use zksync_types::{
+    tx::tx_execution_info::TxExecutionStatus, zk_evm::block_properties::BlockProperties,
+};
+use zksync_utils::{h256_to_u256, u256_to_h256};
 use zksync_web3_decl::error::Web3Error;
 
 /// Implementation of EvmNamespace
@@ -61,18 +74,80 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
         let inner = Arc::clone(&self.node);
         Box::pin(async move {
             match inner.write() {
-                Ok(mut inner_guard) => {
-                    let block = BlockInfo {
-                        batch_number: inner_guard.current_batch,
-                        block_timestamp: inner_guard.current_miniblock,
-                        tx_hash: None,
+                Ok(mut inner) => {
+                    let tx_hash = H256::random();
+                    let (keys, block, bytecodes) = {
+                        let mut storage_view = StorageView::new(&inner.fork_storage);
+                        let mut oracle_tools = OracleTools::new(&mut storage_view, HistoryEnabled);
+                        let bootloader_code = &inner.baseline_contracts;
+
+                        let block_context = BlockContext {
+                            block_number: inner.current_batch,
+                            block_timestamp: inner.current_timestamp,
+                            l1_gas_price: inner.l1_gas_price,
+                            fair_l2_gas_price: L2_GAS_PRICE,
+                            operator_address: H160::zero(),
+                        };
+
+                        let block_properties = BlockProperties {
+                            default_aa_code_hash: h256_to_u256(bootloader_code.default_aa.hash),
+                            zkporter_is_available: false,
+                        };
+
+                        let block = BlockInfo {
+                            batch_number: block_context.block_number,
+                            block_timestamp: block_context.block_timestamp,
+                            tx_hash: Some(tx_hash),
+                        };
+
+                        // init vm
+                        let mut vm = init_vm_inner(
+                            &mut oracle_tools,
+                            BlockContextMode::NewBlock(block_context.into(), Default::default()),
+                            &block_properties,
+                            BLOCK_GAS_LIMIT,
+                            bootloader_code,
+                            TxExecutionMode::VerifyExecute,
+                        );
+
+                        vm.execute_till_block_end(BootloaderJobType::BlockPostprocessing);
+
+                        let bytecodes = vm
+                            .state
+                            .decommittment_processor
+                            .known_bytecodes
+                            .inner()
+                            .clone();
+
+                        let modified_keys = storage_view.modified_storage_keys().clone();
+                        (modified_keys, block, bytecodes)
                     };
-                    inner_guard.blocks.insert(block.batch_number, block);
-                    {
-                        inner_guard.current_timestamp += 1;
-                        inner_guard.current_batch += 1;
-                        inner_guard.current_miniblock += 1;
+
+                    for (key, value) in keys.iter() {
+                        inner.fork_storage.set_value(*key, *value);
                     }
+
+                    // Write all the factory deps.
+                    for (hash, code) in bytecodes.iter() {
+                        inner.fork_storage.store_factory_dep(
+                            u256_to_h256(*hash),
+                            code.iter()
+                                .flat_map(|entry| {
+                                    let mut bytes = vec![0u8; 32];
+                                    entry.to_big_endian(&mut bytes);
+                                    bytes.to_vec()
+                                })
+                                .collect(),
+                        )
+                    }
+                    let current_miniblock = inner.current_miniblock;
+                    inner.blocks.insert(block.batch_number, block);
+                    {
+                        inner.current_timestamp += 1;
+                        inner.current_batch += 1;
+                        inner.current_miniblock += 1;
+                    }
+
                     Ok("0x0".to_string())
                 }
                 Err(_) => Err(into_jsrpc_error(Web3Error::InternalError)),
