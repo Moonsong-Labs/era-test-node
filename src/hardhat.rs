@@ -3,9 +3,10 @@ use std::sync::{Arc, RwLock};
 use crate::{fork::ForkSource, node::InMemoryNodeInner};
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
-use zksync_basic_types::{Address, U256};
+use zksync_basic_types::{AccountTreeId, Address, U256};
 use zksync_core::api_server::web3::backend_jsonrpc::error::into_jsrpc_error;
-use zksync_types::utils::storage_key_for_eth_balance;
+use zksync_state::ReadStorage;
+use zksync_types::{utils::storage_key_for_eth_balance, StorageKey, NONCE_HOLDER_ADDRESS};
 use zksync_utils::u256_to_h256;
 use zksync_web3_decl::error::Web3Error;
 
@@ -35,6 +36,19 @@ pub trait HardhatNamespaceT {
     /// A `BoxFuture` containing a `Result` with a `bool` representing the success of the operation.
     #[rpc(name = "hardhat_setBalance")]
     fn set_balance(&self, address: Address, balance: U256) -> BoxFuture<Result<bool>>;
+
+    /// Modifies an account's nonce by overwriting it.
+    ///
+    /// # Arguments
+    ///
+    /// * `address` - The `Address` whose nonce is to be changed
+    /// * `nonce` - The new nonce
+    ///
+    /// # Returns
+    ///
+    /// A `BoxFuture` containing a `Result` with a `bool` representing the success of the operation.
+    #[rpc(name = "hardhat_setNonce")]
+    fn set_nonce(&self, address: Address, balance: U256) -> BoxFuture<Result<bool>>;
 }
 
 impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> HardhatNamespaceT
@@ -54,6 +68,36 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> HardhatNamespaceT
                     inner_guard
                         .fork_storage
                         .set_value(balance_key, u256_to_h256(balance));
+                    println!(
+                        "👷 Balance for address {:?} has been manually set to {} Wei",
+                        address, balance
+                    );
+                    Ok(true)
+                }
+                Err(_) => {
+                    let web3_error = Web3Error::InternalError;
+                    Err(into_jsrpc_error(web3_error))
+                }
+            }
+        })
+    }
+
+    fn set_nonce(
+        &self,
+        address: Address,
+        balance: U256,
+    ) -> jsonrpc_core::BoxFuture<jsonrpc_core::Result<bool>> {
+        let inner = Arc::clone(&self.node);
+        Box::pin(async move {
+            match inner.write() {
+                Ok(mut inner_guard) => {
+                    let nonce_key = StorageKey::new(
+                        AccountTreeId::new(NONCE_HOLDER_ADDRESS),
+                        H256::from_slice(&[0u8; 32]),
+                    );
+                    let nonce = inner_guard
+                        .fork_storage
+                        .read_value(balance_key, u256_to_h256(balance));
                     println!(
                         "👷 Balance for address {:?} has been manually set to {} Wei",
                         address, balance
