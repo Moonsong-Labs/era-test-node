@@ -125,13 +125,14 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EvmNamespaceT
                                 .collect(),
                         )
                     }
+                    println!("👷 Mined block #{}", block.batch_number);
+
                     inner.blocks.insert(block.batch_number, block);
                     {
                         inner.current_timestamp += 1;
                         inner.current_batch += 1;
                         inner.current_miniblock += 1;
                     }
-
                     Ok("0x0".to_string())
                 }
                 Err(_) => Err(into_jsrpc_error(Web3Error::InternalError)),
