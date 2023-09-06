@@ -98,21 +98,23 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> HardhatNamespaceT
                     let full_nonce = inner_guard.fork_storage.read_value(&nonce_key);
                     let (mut account_nonce, mut deployment_nonce) =
                         decompose_full_nonce(h256_to_u256(full_nonce));
-                    println!(
-                        "tx_nonce: {:?}, dply_nonce: {:?}",
-                        account_nonce, deployment_nonce
-                    );
                     if account_nonce >= nonce {
-                        return Err(into_jsrpc_error(Web3Error::InternalError));
+                        return Err(jsonrpc_core::Error::invalid_params(&format!(
+                            "Account Nonce is already set to a higher value ({}, requested {})",
+                            account_nonce, nonce
+                        )));
                     }
                     account_nonce = nonce;
                     if deployment_nonce >= nonce {
-                        return Err(into_jsrpc_error(Web3Error::InternalError));
+                        return Err(jsonrpc_core::Error::invalid_params(&format!(
+                            "Deployment Nonce is already set to a higher value ({}, requested {})",
+                            deployment_nonce, nonce
+                        )));
                     }
                     deployment_nonce = nonce;
                     let enforced_full_nonce = nonces_to_full_nonce(account_nonce, deployment_nonce);
                     println!(
-                        "👷 Nonce for address {:?} has been manually set to {}",
+                        "👷 Nonces for address {:?} have been set to {}",
                         address, nonce
                     );
                     inner_guard
