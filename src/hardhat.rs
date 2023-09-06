@@ -3,11 +3,15 @@ use std::sync::{Arc, RwLock};
 use crate::{fork::ForkSource, node::InMemoryNodeInner};
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
-use zksync_basic_types::{AccountTreeId, Address, U256};
+use zksync_basic_types::{AccountTreeId, Address, H256, U256};
 use zksync_core::api_server::web3::backend_jsonrpc::error::into_jsrpc_error;
 use zksync_state::ReadStorage;
-use zksync_types::{utils::storage_key_for_eth_balance, StorageKey, NONCE_HOLDER_ADDRESS};
-use zksync_utils::u256_to_h256;
+use zksync_types::{
+    get_nonce_key,
+    utils::{decompose_full_nonce, nonces_to_full_nonce, storage_key_for_eth_balance},
+    StorageKey, NONCE_HOLDER_ADDRESS,
+};
+use zksync_utils::{address_to_h256, h256_to_u256, u256_to_h256};
 use zksync_web3_decl::error::Web3Error;
 
 /// Implementation of HardhatNamespaceImpl
@@ -85,23 +89,38 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> HardhatNamespaceT
     fn set_nonce(
         &self,
         address: Address,
-        balance: U256,
+        nonce: U256,
     ) -> jsonrpc_core::BoxFuture<jsonrpc_core::Result<bool>> {
         let inner = Arc::clone(&self.node);
         Box::pin(async move {
             match inner.write() {
                 Ok(mut inner_guard) => {
-                    let nonce_key = StorageKey::new(
-                        AccountTreeId::new(NONCE_HOLDER_ADDRESS),
-                        H256::from_slice(&[0u8; 32]),
-                    );
-                    let nonce = inner_guard
-                        .fork_storage
-                        .read_value(balance_key, u256_to_h256(balance));
+                    let nonce_key = get_nonce_key(&address);
+                    let full_nonce = inner_guard.fork_storage.read_value(&nonce_key);
+                    let (mut account_nonce, mut deployment_nonce) =
+                        decompose_full_nonce(h256_to_u256(full_nonce));
                     println!(
-                        "👷 Balance for address {:?} has been manually set to {} Wei",
-                        address, balance
+                        "tx_nonce: {:?}, dply_nonce: {:?}",
+                        account_nonce, deployment_nonce
                     );
+                    if account_nonce >= nonce {
+                        let web3_error = Web3Error::InternalError;
+                        return Err(into_jsrpc_error(web3_error));
+                    }
+                    account_nonce = nonce;
+                    if deployment_nonce >= nonce {
+                        let web3_error = Web3Error::InternalError;
+                        return Err(into_jsrpc_error(web3_error));
+                    }
+                    deployment_nonce = nonce;
+                    let enforced_full_nonce = nonces_to_full_nonce(U256::from(0), deployment_nonce);
+                    println!(
+                        "👷 Nonce for address {:?} has been manually set to {}",
+                        address, nonce
+                    );
+                    inner_guard
+                        .fork_storage
+                        .set_value(nonce_key, u256_to_h256(enforced_full_nonce));
                     Ok(true)
                 }
                 Err(_) => {
