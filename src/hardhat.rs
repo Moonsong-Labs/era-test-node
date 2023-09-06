@@ -3,15 +3,14 @@ use std::sync::{Arc, RwLock};
 use crate::{fork::ForkSource, node::InMemoryNodeInner};
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
-use zksync_basic_types::{AccountTreeId, Address, H256, U256};
+use zksync_basic_types::{Address, U256};
 use zksync_core::api_server::web3::backend_jsonrpc::error::into_jsrpc_error;
 use zksync_state::ReadStorage;
 use zksync_types::{
     get_nonce_key,
     utils::{decompose_full_nonce, nonces_to_full_nonce, storage_key_for_eth_balance},
-    StorageKey, NONCE_HOLDER_ADDRESS,
 };
-use zksync_utils::{address_to_h256, h256_to_u256, u256_to_h256};
+use zksync_utils::{h256_to_u256, u256_to_h256};
 use zksync_web3_decl::error::Web3Error;
 
 /// Implementation of HardhatNamespaceImpl
@@ -104,16 +103,14 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> HardhatNamespaceT
                         account_nonce, deployment_nonce
                     );
                     if account_nonce >= nonce {
-                        let web3_error = Web3Error::InternalError;
-                        return Err(into_jsrpc_error(web3_error));
+                        return Err(into_jsrpc_error(Web3Error::InternalError));
                     }
                     account_nonce = nonce;
                     if deployment_nonce >= nonce {
-                        let web3_error = Web3Error::InternalError;
-                        return Err(into_jsrpc_error(web3_error));
+                        return Err(into_jsrpc_error(Web3Error::InternalError));
                     }
                     deployment_nonce = nonce;
-                    let enforced_full_nonce = nonces_to_full_nonce(U256::from(0), deployment_nonce);
+                    let enforced_full_nonce = nonces_to_full_nonce(account_nonce, deployment_nonce);
                     println!(
                         "👷 Nonce for address {:?} has been manually set to {}",
                         address, nonce
@@ -123,10 +120,7 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> HardhatNamespaceT
                         .set_value(nonce_key, u256_to_h256(enforced_full_nonce));
                     Ok(true)
                 }
-                Err(_) => {
-                    let web3_error = Web3Error::InternalError;
-                    Err(into_jsrpc_error(web3_error))
-                }
+                Err(_) => Err(into_jsrpc_error(Web3Error::InternalError)),
             }
         })
     }
@@ -156,5 +150,25 @@ mod tests {
         let balance_after = node.get_balance(address, None).await.unwrap();
         assert_eq!(balance_after, U256::from(1337));
         assert_ne!(balance_before, balance_after);
+    }
+
+    #[tokio::test]
+    async fn test_set_nonce() {
+        let address = Address::from_str("0x36615Cf349d7F6344891B1e7CA7C72883F5dc049").unwrap();
+        let node = InMemoryNode::<HttpForkSource>::default();
+        let hardhat = HardhatNamespaceImpl::new(node.get_inner());
+
+        let nonce_before = node.get_transaction_count(address, None).await.unwrap();
+
+        let result = hardhat.set_nonce(address, U256::from(1337)).await.unwrap();
+        assert!(result);
+
+        let nonce_after = node.get_transaction_count(address, None).await.unwrap();
+        assert_eq!(nonce_after, U256::from(1337));
+        assert_ne!(nonce_before, nonce_after);
+
+        // setting nonce lower than the current one should fail
+        let result = hardhat.set_nonce(address, U256::from(1336)).await;
+        assert!(result.is_err());
     }
 }
