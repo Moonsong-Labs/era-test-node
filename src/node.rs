@@ -4,7 +4,10 @@ use crate::{
     deps::system_contracts::bytecode_from_slice,
     fork::{ForkDetails, ForkSource, ForkStorage},
     formatter,
-    utils::{adjust_l1_gas_price_for_tx, derive_gas_estimation_overhead, IntoBoxedFuture},
+    utils::{
+        adjust_l1_gas_price_for_tx, adjust_tx_initiator, derive_gas_estimation_overhead,
+        IntoBoxedFuture,
+    },
 };
 use clap::Parser;
 use colored::Colorize;
@@ -27,7 +30,7 @@ use vm::{
     },
     HistoryDisabled, HistoryEnabled, OracleTools, TxRevertReason, VmBlockResult,
 };
-use zksync_basic_types::{AccountTreeId, Bytes, H160, H256, U256, U64};
+use zksync_basic_types::{AccountTreeId, Address, Bytes, H160, H256, U256, U64};
 use zksync_contracts::{
     read_playground_block_bootloader_bytecode, read_sys_contract_bytecode, read_zbin_bytecode,
     BaseSystemContracts, ContractLanguage, SystemContractCode,
@@ -216,6 +219,8 @@ pub struct InMemoryNodeInner<S> {
     pub baseline_contracts: BaseSystemContracts,
     pub playground_contracts: BaseSystemContracts,
     pub fee_estimate_contracts: BaseSystemContracts,
+    // Account to be impersonated- used by hardhat_startImpersonating/stopImpersonating
+    pub impersonated_account: Option<Address>,
 }
 
 type L2TxResult = (
@@ -674,6 +679,7 @@ impl<S: ForkSource + std::fmt::Debug> InMemoryNode<S> {
                 playground_contracts: playground(dev_use_local_contracts),
                 baseline_contracts: baseline_contracts(dev_use_local_contracts),
                 fee_estimate_contracts: fee_estimate_contracts(dev_use_local_contracts),
+                impersonated_account: None,
             })),
         }
     }
@@ -746,7 +752,10 @@ impl<S: ForkSource + std::fmt::Debug> InMemoryNode<S> {
             execution_mode,
         );
 
-        let tx: Transaction = l2_tx.into();
+        let mut tx: Transaction = l2_tx.into();
+        if let Some(impersonated_account) = inner.impersonated_account {
+            tx = adjust_tx_initiator(tx, impersonated_account);
+        }
 
         push_transaction_to_bootloader_memory(&mut vm, &tx, execution_mode, None);
 
@@ -812,7 +821,11 @@ impl<S: ForkSource + std::fmt::Debug> InMemoryNode<S> {
             execution_mode,
         );
 
-        let tx: Transaction = l2_tx.into();
+        let mut tx: Transaction = l2_tx.into();
+        if let Some(impersonated_account) = inner.impersonated_account {
+            tx = adjust_tx_initiator(tx, impersonated_account);
+        }
+
         push_transaction_to_bootloader_memory(&mut vm, &tx, execution_mode, None);
         let tx_result = vm
             .execute_next_tx(u32::MAX, true)

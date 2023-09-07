@@ -5,8 +5,11 @@ use vm::vm_with_bootloader::{
     derive_base_fee_and_gas_per_pubdata, BLOCK_OVERHEAD_GAS, BLOCK_OVERHEAD_PUBDATA,
     BOOTLOADER_TX_ENCODING_SPACE,
 };
-use zksync_basic_types::U256;
-use zksync_types::{zk_evm::zkevm_opcode_defs::system_params::MAX_TX_ERGS_LIMIT, MAX_TXS_IN_BLOCK};
+use zksync_basic_types::{Address, U256};
+use zksync_types::{
+    zk_evm::zkevm_opcode_defs::system_params::MAX_TX_ERGS_LIMIT, ExecuteTransactionCommon,
+    L1TxCommonData, L2TxCommonData, Transaction, MAX_TXS_IN_BLOCK,
+};
 use zksync_utils::ceil_div_u256;
 
 pub(crate) trait IntoBoxedFuture: Sized + Send + 'static {
@@ -121,5 +124,35 @@ pub fn adjust_l1_gas_price_for_tx(
             / U256::from(17);
 
         l1_gas_price.as_u64()
+    }
+}
+
+/// Modifies a `Transaction` to set a new initiator, if
+///
+/// # Arguments
+///
+/// * `tx` - The original `Transaction`
+/// * `initiator` - The new initiator
+///
+/// # Returns
+///
+/// The adjusted `Transaction`.
+pub fn adjust_tx_initiator(tx: Transaction, initiator: Address) -> Transaction {
+    match tx.common_data {
+        ExecuteTransactionCommon::L1(data) => Transaction {
+            common_data: ExecuteTransactionCommon::L1(L1TxCommonData {
+                sender: initiator,
+                ..data
+            }),
+            ..tx
+        },
+        ExecuteTransactionCommon::L2(data) => Transaction {
+            common_data: ExecuteTransactionCommon::L2(L2TxCommonData {
+                initiator_address: initiator,
+                ..data
+            }),
+            ..tx
+        },
+        ExecuteTransactionCommon::ProtocolUpgrade(_) => tx,
     }
 }
