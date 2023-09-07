@@ -1708,7 +1708,7 @@ impl<S: Send + Sync + 'static + ForkSource + std::fmt::Debug> EthNamespaceT for 
     }
 
     fn protocol_version(&self) -> jsonrpc_core::BoxFuture<jsonrpc_core::Result<String>> {
-        not_implemented("protocol_version")
+        Ok("zks/1".to_string()).into_boxed_future()
     }
 
     fn syncing(
