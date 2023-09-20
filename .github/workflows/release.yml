@@ -41,7 +41,7 @@ jobs:
               platform: macos-latest
 
     runs-on: ${{ matrix.platform }}
-    needs: [extract-version]
+    # needs: [extract-version]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
