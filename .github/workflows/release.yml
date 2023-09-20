@@ -31,7 +31,7 @@ jobs:
       matrix:
         # TODO: fix and add aarch64-unknown-linux-gnu target
         # See: https://github.com/matter-labs/era-test-node/issues/56
-        arch: [aarch64-unknown-linux-gnu]
+        arch: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
         include:
           -   arch: x86_64-unknown-linux-gnu
               platform: ubuntu-20.04
