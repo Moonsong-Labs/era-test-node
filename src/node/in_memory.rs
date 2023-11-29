@@ -382,7 +382,7 @@ impl<S: std::fmt::Debug + ForkSource> InMemoryNodeInner<S> {
             gas_limit: BLOCK_GAS_LIMIT,
             execution_mode,
             default_validation_computational_gas_limit: BLOCK_GAS_LIMIT,
-            chain_id: self.fork_storage.chain_id,
+            chain_id: self.fork_storage.chain_id.read().unwrap().to_owned(),
         }
     }
 
@@ -868,13 +868,13 @@ fn contract_address_from_tx_result(execution_result: &VmExecutionResultAndLogs) 
     None
 }
 
-impl<S: ForkSource + std::fmt::Debug + Clone> Default for InMemoryNode<S> {
+impl<S: ForkSource + std::fmt::Debug + Clone + 'static> Default for InMemoryNode<S> {
     fn default() -> Self {
         InMemoryNode::new(None, None, InMemoryNodeConfig::default())
     }
 }
 
-impl<S: ForkSource + std::fmt::Debug + Clone> InMemoryNode<S> {
+impl<S: ForkSource + std::fmt::Debug + Clone + 'static> InMemoryNode<S> {
     pub fn new(
         fork: Option<ForkDetails<S>>,
         observability: Option<Observability>,
@@ -1272,17 +1272,32 @@ impl<S: ForkSource + std::fmt::Debug + Clone> InMemoryNode<S> {
     /// This is because external users of the library may call this function to perform an isolated
     /// VM operation with an external storage and get the results back.
     /// So any data populated in [Self::run_l2_tx] will not be available for the next invocation.
-    pub fn run_l2_tx_raw(
-        &self,
+    // pub fn run_l2_tx_raw<
+    //     'a,
+    //     F: FnMut(
+    //         &'a ForkStorage<S>,
+    //     )
+    //         -> Option<Box<dyn VmTracer<StorageView<&'a ForkStorage<S>>, HistoryDisabled>>>,
+    // >(
+    pub fn run_l2_tx_raw<'a>(
+        &'a self,
         l2_tx: L2Tx,
         execution_mode: TxExecutionMode,
+        // mut additional_tracers: F,
+        // tracers: Option<
+        //     Vec<Box<dyn VmTracer<StorageView<ForkStorage<S>>, HistoryDisabled>>>,
+        // >,
+        tracers: Option<
+            Vec<Box<dyn VmTracer<StorageView<&'a ForkStorage<S>>, HistoryDisabled> + 'static>>,
+        >,
     ) -> Result<L2TxResult, String> {
-        let inner = self
+        let inner: std::sync::RwLockWriteGuard<'_, InMemoryNodeInner<S>> = self
             .inner
             .write()
             .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
 
-        let storage = StorageView::new(&inner.fork_storage).to_rc_ptr();
+        let fork_storage = &inner.fork_storage;
+        let storage = StorageView::new(fork_storage).to_rc_ptr();
 
         let (batch_env, block_ctx) = inner.create_l1_batch_env(storage.clone());
 
@@ -1320,13 +1335,21 @@ impl<S: ForkSource + std::fmt::Debug + Clone> InMemoryNode<S> {
         let call_tracer_result = Arc::new(OnceCell::default());
         let bootloader_debug_result = Arc::new(OnceCell::default());
 
-        let custom_tracers = vec![
-            Box::new(CallTracer::new(call_tracer_result.clone(), HistoryDisabled))
-                as Box<dyn VmTracer<StorageView<&ForkStorage<S>>, HistoryDisabled>>,
+        let mut custom_tracers: Vec<
+            Box<dyn VmTracer<StorageView<&ForkStorage<S>>, HistoryDisabled>>,
+        > = vec![
+            Box::new(CallTracer::new(call_tracer_result.clone(), HistoryDisabled)),
             Box::new(BootloaderDebugTracer {
                 result: bootloader_debug_result.clone(),
-            }) as Box<dyn VmTracer<StorageView<&ForkStorage<S>>, HistoryDisabled>>,
+            }),
         ];
+        // additional_tracers(&mut custom_tracers);
+        // if let Some(t) = additional_tracers(&x) {
+        //     custom_tracers.push(t);
+        // }
+        if let Some(tracers) = tracers {
+            custom_tracers.extend(tracers.into_iter());
+        }
 
         let tx_result = vm.inspect(custom_tracers, VmExecutionMode::OneTx);
 
@@ -1472,6 +1495,7 @@ impl<S: ForkSource + std::fmt::Debug + Clone> InMemoryNode<S> {
         vm.execute(VmExecutionMode::Bootloader);
 
         let modified_keys = storage.borrow().modified_storage_keys().clone();
+        drop(storage);
         Ok((
             modified_keys,
             tx_result,
@@ -1507,7 +1531,8 @@ impl<S: ForkSource + std::fmt::Debug + Clone> InMemoryNode<S> {
         }
 
         let (keys, result, call_traces, block, bytecodes, block_ctx) =
-            self.run_l2_tx_raw(l2_tx.clone(), execution_mode)?;
+            // self.run_l2_tx_raw(l2_tx.clone(), execution_mode, None)?;
+            self.run_l2_tx_raw(l2_tx.clone(), execution_mode, None)?;
 
         if let ExecutionResult::Halt { reason } = result.result {
             // Halt means that something went really bad with the transaction execution (in most cases invalid signature,
@@ -1828,6 +1853,7 @@ mod tests {
         node.run_l2_tx_raw(
             testing::TransactionBuilder::new().build(),
             TxExecutionMode::VerifyExecute,
+            None,
         )
         .expect("transaction must pass with external storage");
     }

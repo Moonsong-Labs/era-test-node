@@ -55,7 +55,7 @@ where
 #[derive(Debug, Clone)]
 pub struct ForkStorage<S> {
     pub inner: Arc<RwLock<ForkStorageInner<S>>>,
-    pub chain_id: L2ChainId,
+    pub chain_id: Arc<RwLock<L2ChainId>>,
 }
 
 #[derive(Debug)]
@@ -93,7 +93,7 @@ impl<S: ForkSource> ForkStorage<S> {
                 fork,
                 factory_dep_cache: Default::default(),
             })),
-            chain_id,
+            chain_id: Arc::new(RwLock::new(chain_id)),
         }
     }
 

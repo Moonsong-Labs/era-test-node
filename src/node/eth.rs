@@ -37,7 +37,7 @@ impl<S: ForkSource + std::fmt::Debug + Clone + Send + Sync + 'static> EthNamespa
     /// Returns the chain ID of the node.
     fn chain_id(&self) -> RpcResult<zksync_basic_types::U64> {
         match self.get_inner().read() {
-            Ok(inner) => Ok(U64::from(inner.fork_storage.chain_id.as_u64())).into_boxed_future(),
+            Ok(inner) => Ok(U64::from(inner.fork_storage.chain_id.read().unwrap().as_u64())).into_boxed_future(),
             Err(_) => Err(into_jsrpc_error(Web3Error::InternalError)).into_boxed_future(),
         }
     }
@@ -338,7 +338,7 @@ impl<S: ForkSource + std::fmt::Debug + Clone + Send + Sync + 'static> EthNamespa
         tx_bytes: zksync_basic_types::Bytes,
     ) -> RpcResult<zksync_basic_types::H256> {
         let chain_id = match self.get_inner().read() {
-            Ok(reader) => reader.fork_storage.chain_id,
+            Ok(reader) => reader.fork_storage.chain_id.read().unwrap().to_owned(),
             Err(_) => {
                 return futures::future::err(into_jsrpc_error(Web3Error::InternalError)).boxed()
             }
