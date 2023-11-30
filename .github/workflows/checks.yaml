@@ -6,7 +6,7 @@ on:
     tags:
       - 'v*'
   pull_request:
-    branches: [main]
+    branches: [main, grw/feat-cheatcode-tracer]
   workflow_dispatch:
 
 jobs:
