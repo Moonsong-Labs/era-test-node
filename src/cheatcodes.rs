@@ -18,6 +18,7 @@ use multivm::{
     },
 };
 use std::{
+    collections::HashMap,
     fmt::Debug,
     sync::{Arc, Mutex, RwLock},
 };
@@ -67,6 +68,7 @@ pub struct CheatcodeTracer<F> {
     near_calls: usize,
     storage_write_queue: Vec<StorageWrite>,
     start_prank_opts: Option<StartPrankOpts>,
+    serialized_objects: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug)]
@@ -96,6 +98,7 @@ abigen!(
         function getNonce(address account)
         function load(address account, bytes32 slot)
         function roll(uint256 blockNumber)
+        function serializeAddress(string objectKey, string valueKey, address value)
         function setNonce(address account, uint64 nonce)
         function startPrank(address sender)
         function startPrank(address sender, address origin)
@@ -230,6 +233,7 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
             return_ptr: None,
             near_calls: 0,
             storage_write_queue: Vec::new(),
+            serialized_objects: HashMap::new(),
         }
     }
 
@@ -310,6 +314,27 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
                 let mut storage = storage.borrow_mut();
                 let value = storage.read_value(&key);
                 self.returndata = Some(vec![h256_to_u256(value)]);
+            }
+            SerializeAddress(SerializeAddressCall {
+                object_key,
+                value_key,
+                value,
+            }) => {
+                tracing::info!(
+                    "Serializing address {:?} with key {:?} to object {:?}",
+                    value,
+                    value_key,
+                    object_key
+                );
+                let json_value = serde_json::json!({
+                    value_key: value
+                });
+
+                let serialized = json_value.to_string();
+
+                let serialized_u256 = Self::serialize_to_u256_vec(&serialized);
+
+                self.returndata = Some(serialized_u256)
             }
             SetNonce(SetNonceCall { account, nonce }) => {
                 tracing::info!("Setting nonce for {account:?} to {nonce}");
@@ -421,6 +446,20 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
             read_value: storage.borrow_mut().read_value(&key),
             write_value: value,
         });
+    }
+
+    fn serialize_to_u256_vec(serialized: &str) -> Vec<U256> {
+        let serialized_bytes = serialized.as_bytes().to_vec();
+        let serialized_u256 = serialized_bytes
+            .chunks(32)
+            .map(|chunk| {
+                let mut bytes = [0u8; 32];
+                bytes[..chunk.len()].copy_from_slice(chunk);
+                U256::from(bytes)
+            })
+            .collect::<Vec<U256>>();
+
+        serialized_u256
     }
 }
 

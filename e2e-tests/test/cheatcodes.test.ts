@@ -98,6 +98,23 @@ describe("Cheatcodes", function () {
     expect(receipt.status).to.eq(1);
   });
 
+  it("Should test vm.serializeAddress", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+    const randomWallet = Wallet.createRandom().connect(provider);
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+    const tx = await cheatcodes.testSerializeAddress(randomWallet.address, {
+      gasLimit: 1000000,
+    });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
   it("Should test vm.setNonce and vm.getNonce", async function () {
     // Arrange
     const wallet = new Wallet(RichAccounts[0].PrivateKey);
