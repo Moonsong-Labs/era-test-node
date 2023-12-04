@@ -45,7 +45,7 @@ contract TestCheatcodes {
     );
     require(success, "serializeAddress failed");
     bytes32 serialized_data = abi.decode(data, (bytes32));
-    require(serialized_data == bytes32(data), "address mismatch");
+    require(serialized_data == bytes32(data), "serialized data mismatch");
   }
 
   function testSetNonce(address account, uint64 nonce) external {
