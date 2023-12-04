@@ -41,7 +41,9 @@ contract TestCheatcodes {
   }
 
   function testSerializeAddress(address addr) external {
-    (bool success, bytes memory data) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("serializeAddress(string,string,address)", "test", "test", addr));
+    (bool success, bytes memory data) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("serializeAddress(string,string,address)", "test", "test", addr)
+    );
     require(success, "serializeAddress failed");
     bytes32 serialized_data = abi.decode(data, (bytes32));
     require(serialized_data == bytes32(data), "address mismatch");
@@ -159,7 +161,9 @@ contract TestCheatcodes {
 
   function testLoad(bytes32 slot) external {
     TestLoadTarget testLoadTarget = new TestLoadTarget();
-    (bool success, bytes memory data) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("load(address,bytes32)", address(testLoadTarget), slot));
+    (bool success, bytes memory data) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("load(address,bytes32)", address(testLoadTarget), slot)
+    );
     require(success, "load failed");
     bytes32 loadedValue = abi.decode(data, (bytes32));
     require(loadedValue == bytes32(uint256(1337)), "address mismatch");
