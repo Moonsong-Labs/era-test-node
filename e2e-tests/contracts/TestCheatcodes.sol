@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 contract TestCheatcodes {
+  event Log(bytes32 message);
   address constant CHEATCODE_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
   function testAddr(uint256 privateKey, address addr) external {
@@ -37,6 +38,13 @@ contract TestCheatcodes {
 
     uint256 finalBlockNumber = block.number;
     require(finalBlockNumber == blockNumber, "block number was not changed");
+  }
+
+  function testSerializeAddress(address addr) external {
+    (bool success, bytes memory data) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("serializeAddress(string,string,address)", "test", "test", addr));
+    require(success, "serializeAddress failed");
+    bytes32 serialized_data = abi.decode(data, (bytes32));
+    require(serialized_data == bytes32(data), "address mismatch");
   }
 
   function testSetNonce(address account, uint64 nonce) external {
