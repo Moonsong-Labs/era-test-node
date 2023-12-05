@@ -126,6 +126,73 @@ contract TestCheatcodes {
     );
   }
 
+  function testToStringFromAddress() external {
+    address testAddress = 0x413D15117be7a498e68A64FcfdB22C6e2AaE1808;
+    (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("toString(address)", testAddress)
+    );
+    bytes memory data = trimReturnBytes(rawData);
+    string memory testString = string(abi.encodePacked(data));
+    require(
+      keccak256(bytes(testString)) == keccak256(bytes("0x413D15117be7a498e68A64FcfdB22C6e2AaE1808")),
+      "toString mismatch"
+    );
+  }
+
+  function testToStringFromBool() external {
+    (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("toString(bool)", false));
+    bytes memory data = trimReturnBytes(rawData);
+    string memory testString = string(abi.encodePacked(data));
+    require(keccak256(bytes(testString)) == keccak256(bytes("false")), "toString mismatch");
+
+    (success, rawData) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("toString(bool)", true));
+    data = trimReturnBytes(rawData);
+    testString = string(abi.encodePacked(data));
+    require(keccak256(bytes(testString)) == keccak256(bytes("true")), "toString mismatch");
+  }
+
+  function testToStringFromUint256(uint256 value, string memory stringValue) external {
+    (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("toString(uint256)", value));
+    bytes memory data = trimReturnBytes(rawData);
+    string memory testString = string(abi.encodePacked(data));
+    require(keccak256(bytes(testString)) == keccak256(bytes(stringValue)), "toString mismatch");
+  }
+
+  function testToStringFromInt256(int256 value, string memory stringValue) external {
+    (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(abi.encodeWithSignature("toString(int256)", value));
+    bytes memory data = trimReturnBytes(rawData);
+    string memory testString = string(abi.encodePacked(data));
+    require(keccak256(bytes(testString)) == keccak256(bytes(stringValue)), "toString mismatch");
+  }
+
+  function testToStringFromBytes32() external {
+    bytes32 testBytes = hex"4ec893b0a778b562e893cee722869c3e924e9ee46ec897cabda6b765a6624324";
+    (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("toString(bytes32)", testBytes)
+    );
+    bytes memory data = trimReturnBytes(rawData);
+    string memory testString = string(abi.encodePacked(data));
+    require(
+      keccak256(bytes(testString)) ==
+        keccak256(bytes("0x4ec893b0a778b562e893cee722869c3e924e9ee46ec897cabda6b765a6624324")),
+      "toString mismatch"
+    );
+  }
+
+  function testToStringFromBytes() external {
+    bytes memory testBytes = hex"89987299ea14decf0e11d068474a6e459439802edca8aacf9644222e490d8ef6db";
+    (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("toString(bytes)", testBytes)
+    );
+    bytes memory data = trimReturnBytes(rawData);
+    string memory testString = string(abi.encodePacked(data));
+    require(
+      keccak256(bytes(testString)) ==
+        keccak256(bytes("0x89987299ea14decf0e11d068474a6e459439802edca8aacf9644222e490d8ef6db")),
+      "toString mismatch"
+    );
+  }
+
   function testWarp(uint256 timestamp) external {
     uint256 initialTimestamp = block.timestamp;
     require(timestamp != initialTimestamp, "timestamp must be different than current block timestamp");
@@ -147,6 +214,20 @@ contract TestCheatcodes {
     require(success, "store failed");
 
     testStoreInstance.testStoredValue(value);
+  }
+
+  function trimReturnBytes(bytes memory rawData) internal pure returns (bytes memory) {
+    uint256 lengthStartingPos = rawData.length - 32;
+    bytes memory lengthSlice = new bytes(32);
+    for (uint256 i = 0; i < 32; i++) {
+      lengthSlice[i] = rawData[lengthStartingPos + i];
+    }
+    uint256 length = abi.decode(lengthSlice, (uint256));
+    bytes memory data = new bytes(length);
+    for (uint256 i = 0; i < length; i++) {
+      data[i] = rawData[i];
+    }
+    return data;
   }
 }
 
