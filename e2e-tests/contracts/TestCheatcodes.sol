@@ -28,6 +28,16 @@ contract TestCheatcodes {
     require(success, "setGreeting failed");
   }
 
+  function testLoad(bytes32 slot) external {
+    TestLoadTarget testLoadTarget = new TestLoadTarget();
+    (bool success, bytes memory data) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("load(address,bytes32)", address(testLoadTarget), slot)
+    );
+    require(success, "load failed");
+    bytes32 loadedValue = abi.decode(data, (bytes32));
+    require(loadedValue == bytes32(uint256(1337)), "address mismatch");
+  }
+
   function testRoll(uint256 blockNumber) external {
     uint256 initialBlockNumber = block.number;
     require(blockNumber != initialBlockNumber, "block number must be different than current block number");
@@ -126,6 +136,18 @@ contract TestCheatcodes {
     );
   }
 
+  function testStore(bytes32 slot, bytes32 value) external {
+    testStoreTarget testStoreInstance = new testStoreTarget();
+    testStoreInstance.testStoredValue(0);
+
+    (bool success, ) = CHEATCODE_ADDRESS.call(
+      abi.encodeWithSignature("store(address,bytes32,bytes32)", address(testStoreInstance), slot, value)
+    );
+    require(success, "store failed");
+
+    testStoreInstance.testStoredValue(value);
+  }
+
   function testToStringFromAddress() external {
     address testAddress = 0x413D15117be7a498e68A64FcfdB22C6e2AaE1808;
     (bool success, bytes memory rawData) = CHEATCODE_ADDRESS.call(
@@ -204,18 +226,6 @@ contract TestCheatcodes {
     require(finalTimestamp == timestamp, "timestamp was not changed");
   }
 
-  function testStore(bytes32 slot, bytes32 value) external {
-    testStoreTarget testStoreInstance = new testStoreTarget();
-    testStoreInstance.testStoredValue(0);
-
-    (bool success, ) = CHEATCODE_ADDRESS.call(
-      abi.encodeWithSignature("store(address,bytes32,bytes32)", address(testStoreInstance), slot, value)
-    );
-    require(success, "store failed");
-
-    testStoreInstance.testStoredValue(value);
-  }
-
   function trimReturnBytes(bytes memory rawData) internal pure returns (bytes memory) {
     uint256 lengthStartingPos = rawData.length - 32;
     bytes memory lengthSlice = new bytes(32);
@@ -229,6 +239,10 @@ contract TestCheatcodes {
     }
     return data;
   }
+}
+
+contract TestLoadTarget {
+  bytes32 public testValue = bytes32(uint256(1337)); //slot 0
 }
 
 contract testStoreTarget {

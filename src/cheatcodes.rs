@@ -94,6 +94,7 @@ abigen!(
         function deal(address who, uint256 newBalance)
         function etch(address who, bytes calldata code)
         function getNonce(address account)
+        function load(address account, bytes32 slot)
         function roll(uint256 blockNumber)
         function setNonce(address account, uint64 nonce)
         function startPrank(address sender)
@@ -309,6 +310,13 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
                 tracing::info!("👷 Setting returndata",);
                 self.returndata = Some(vec![account_nonce]);
             }
+            Load(LoadCall { account, slot }) => {
+                tracing::info!("Getting storage slot {:?} for account {:?}", slot, account);
+                let key = StorageKey::new(AccountTreeId::new(account), H256(slot));
+                let mut storage = storage.borrow_mut();
+                let value = storage.read_value(&key);
+                self.returndata = Some(vec![h256_to_u256(value)]);
+            }
             SetNonce(SetNonceCall { account, nonce }) => {
                 tracing::info!("Setting nonce for {account:?} to {nonce}");
                 let nonce_key = get_nonce_key(&account);
@@ -376,6 +384,20 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
 
                 self.start_prank_opts = None;
             }
+            Store(StoreCall {
+                account,
+                slot,
+                value,
+            }) => {
+                tracing::info!(
+                    "👷 Setting storage slot {:?} for account {:?} to {:?}",
+                    slot,
+                    account,
+                    value
+                );
+                let key = StorageKey::new(AccountTreeId::new(account), H256(slot));
+                self.write_storage(key, H256(value), storage);
+            }
             ToString0(ToString0Call { value }) => {
                 tracing::info!("Converting address into string");
                 let address = Address::from(value);
@@ -419,20 +441,6 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
                     unpack_block_info(h256_to_u256(storage.borrow_mut().read_value(&key)));
                 let value = u256_to_h256(pack_block_info(block_number, timestamp.as_u64()));
                 self.write_storage(key, value, storage);
-            }
-            Store(StoreCall {
-                account,
-                slot,
-                value,
-            }) => {
-                tracing::info!(
-                    "👷 Setting storage slot {:?} for account {:?} to {:?}",
-                    slot,
-                    account,
-                    value
-                );
-                let key = StorageKey::new(AccountTreeId::new(account), H256(slot));
-                self.write_storage(key, H256(value), storage);
             }
         };
     }
