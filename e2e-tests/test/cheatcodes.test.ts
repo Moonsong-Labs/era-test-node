@@ -161,14 +161,103 @@ describe("Cheatcodes", function () {
     // Arrange
     const wallet = new Wallet(RichAccounts[0].PrivateKey);
     const deployer = new Deployer(hre, wallet);
+    const slot = hre.ethers.constants.HashZero;
+    const value = hre.ethers.constants.MaxUint256;
 
     // Act
     const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
-    const slot = hre.ethers.constants.HashZero;
-    const value = hre.ethers.constants.MaxUint256;
     const tx = await cheatcodes.testStore(slot, value, {
       gasLimit: 10000000,
     });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
+  it("Should test vm.toString from address", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+    const tx = await cheatcodes.testToStringFromAddress({ gasLimit: 100000000 });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
+  it("Should test vm.toString from bool", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+    const tx = await cheatcodes.testToStringFromBool({ gasLimit: 100000000 });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
+  it("Should test vm.toString from uint256", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+    const value = hre.ethers.BigNumber.from(hre.ethers.utils.randomBytes(32));
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+
+    const tx = await cheatcodes.testToStringFromUint256(value, value.toString(), { gasLimit: 100000000 });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
+  it("Should test vm.toString from int256", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+    const value = hre.ethers.BigNumber.from(hre.ethers.utils.randomBytes(32));
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+
+    const tx = await cheatcodes.testToStringFromUint256(value, value.toString(), { gasLimit: 100000000 });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
+  it("Should test vm.toString from bytes32", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+
+    const tx = await cheatcodes.testToStringFromBytes32({ gasLimit: 100000000 });
+    const receipt = await tx.wait();
+
+    // Assert
+    expect(receipt.status).to.eq(1);
+  });
+
+  it("Should test vm.toString from bytes", async function () {
+    // Arrange
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+
+    // Act
+    const cheatcodes = await deployContract(deployer, "TestCheatcodes", []);
+    const tx = await cheatcodes.testToStringFromBytes({ gasLimit: 100000000 });
     const receipt = await tx.wait();
 
     // Assert

@@ -2,7 +2,7 @@ use crate::{
     node::{BlockContext, InMemoryNodeInner},
     utils::bytecode_to_factory_dep,
 };
-use ethers::{abi::AbiDecode, prelude::abigen};
+use ethers::{abi::AbiDecode, prelude::abigen, utils::to_checksum};
 use itertools::Itertools;
 use multivm::zk_evm_1_3_3::tracing::AfterExecutionData;
 use multivm::zk_evm_1_3_3::vm_state::PrimitiveValue;
@@ -90,6 +90,8 @@ pub trait NodeCtx {
 abigen!(
     CheatcodeContract,
     r#"[
+
+
         function addr(uint256 privateKey)
         function deal(address who, uint256 newBalance)
         function etch(address who, bytes calldata code)
@@ -100,8 +102,14 @@ abigen!(
         function startPrank(address sender)
         function startPrank(address sender, address origin)
         function stopPrank()
-        function warp(uint256 timestamp)
         function store(address account, bytes32 slot, bytes32 value)
+        function toString(address value)
+        function toString(bool value)
+        function toString(uint256 value)
+        function toString(int256 value)
+        function toString(bytes32 value)
+        function toString(bytes value)
+        function warp(uint256 timestamp)
     ]"#
 );
 
@@ -392,6 +400,37 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
                 let key = StorageKey::new(AccountTreeId::new(account), H256(slot));
                 self.write_storage(key, H256(value), storage);
             }
+            ToString0(ToString0Call { value }) => {
+                tracing::info!("Converting address into string");
+                let address = Address::from(value);
+                let address_with_checksum = to_checksum(&address, None);
+                self.add_return_data(address_with_checksum.as_bytes());
+            }
+            ToString1(ToString1Call { value }) => {
+                tracing::info!("Converting bool into string");
+                let bool_value = value.to_string();
+                self.add_return_data(bool_value.as_bytes());
+            }
+            ToString2(ToString2Call { value }) => {
+                tracing::info!("Converting uint256 into string");
+                let uint_value = value.to_string();
+                self.add_return_data(uint_value.as_bytes());
+            }
+            ToString3(ToString3Call { value }) => {
+                tracing::info!("Converting int256 into string");
+                let int_value = value.to_string();
+                self.add_return_data(int_value.as_bytes());
+            }
+            ToString4(ToString4Call { value }) => {
+                tracing::info!("Converting bytes32 into string");
+                let bytes_value = format!("0x{}", hex::encode(value));
+                self.add_return_data(bytes_value.as_bytes());
+            }
+            ToString5(ToString5Call { value }) => {
+                tracing::info!("Converting bytes into string");
+                let bytes_value = format!("0x{}", hex::encode(value));
+                self.add_return_data(bytes_value.as_bytes());
+            }
             Warp(WarpCall { timestamp }) => {
                 tracing::info!("Setting block timestamp {}", timestamp);
                 self.node_ctx.set_time(timestamp.as_u64());
@@ -400,12 +439,10 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
                     AccountTreeId::new(zksync_types::SYSTEM_CONTEXT_ADDRESS),
                     zksync_types::CURRENT_VIRTUAL_BLOCK_INFO_POSITION,
                 );
-                let mut storage = storage.borrow_mut();
-                let (block_number, _) = unpack_block_info(h256_to_u256(storage.read_value(&key)));
-                storage.set_value(
-                    key,
-                    u256_to_h256(pack_block_info(block_number, timestamp.as_u64())),
-                );
+                let (block_number, _) =
+                    unpack_block_info(h256_to_u256(storage.borrow_mut().read_value(&key)));
+                let value = u256_to_h256(pack_block_info(block_number, timestamp.as_u64()));
+                self.write_storage(key, value, storage);
             }
         };
     }
@@ -421,6 +458,25 @@ impl<F: NodeCtx> CheatcodeTracer<F> {
             read_value: storage.borrow_mut().read_value(&key),
             write_value: value,
         });
+    }
+
+    fn add_return_data(&mut self, data: &[u8]) {
+        let data_length = data.len();
+        let mut data: Vec<U256> = data
+            .chunks(32)
+            .map(|b| {
+                // Copies the bytes into a 32 byte array
+                // padding with zeros to the right if necessary
+                let mut bytes = [0u8; 32];
+                bytes[..b.len()].copy_from_slice(b);
+                bytes.into()
+            })
+            .collect_vec();
+
+        // Add the length of the data to the end of the return data
+        data.push(data_length.into());
+
+        self.returndata = Some(data);
     }
 }
 
