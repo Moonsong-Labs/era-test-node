@@ -90,6 +90,8 @@ pub trait NodeCtx {
 abigen!(
     CheatcodeContract,
     r#"[
+
+
         function addr(uint256 privateKey)
         function deal(address who, uint256 newBalance)
         function etch(address who, bytes calldata code)
@@ -100,6 +102,7 @@ abigen!(
         function startPrank(address sender)
         function startPrank(address sender, address origin)
         function stopPrank()
+        function store(address account, bytes32 slot, bytes32 value)
         function toString(address value)
         function toString(bool value)
         function toString(uint256 value)
@@ -107,7 +110,6 @@ abigen!(
         function toString(bytes32 value)
         function toString(bytes value)
         function warp(uint256 timestamp)
-        function store(address account, bytes32 slot, bytes32 value)
     ]"#
 );
 
