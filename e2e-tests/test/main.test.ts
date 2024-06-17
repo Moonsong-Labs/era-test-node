@@ -17,7 +17,7 @@ describe("Greeter Smart Contract", function () {
 
     const five = await deployContract(deployer, "Return5");
 
-    expect(await five.value()).to.eq(5);
+    expect(await five.value()).to.eq(15);
   });
 
   it("Should return the new greeting once it's changed", async function () {
