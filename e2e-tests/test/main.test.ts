@@ -16,6 +16,11 @@ describe("Greeter Smart Contract", function () {
     const deployer = new Deployer(hre, wallet);
 
     const five = await deployContract(deployer, "Return5");
+    console.log(`
+      --------------------------
+      Want: 15
+      Got : ${await five.value()}
+      --------------------------`);
 
     expect(await five.value()).to.eq(15);
   });
