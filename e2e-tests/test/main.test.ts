@@ -10,6 +10,16 @@ import { Log, TransactionReceipt } from "zksync-web3/build/src/types";
 const provider = getTestProvider();
 
 describe("Greeter Smart Contract", function () {
+
+  it.only("should override return", async function () {
+    const wallet = new Wallet(RichAccounts[0].PrivateKey);
+    const deployer = new Deployer(hre, wallet);
+
+    const five = await deployContract(deployer, "Return5");
+
+    expect(await five.value()).to.eq(5);
+  });
+
   it("Should return the new greeting once it's changed", async function () {
     const wallet = new Wallet(RichAccounts[0].PrivateKey);
     const deployer = new Deployer(hre, wallet);

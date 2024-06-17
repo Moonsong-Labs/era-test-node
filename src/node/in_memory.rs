@@ -1086,6 +1086,8 @@ impl<S: ForkSource + std::fmt::Debug + Clone> InMemoryNode<S> {
 
         let call_tracer_result = Arc::new(OnceCell::default());
 
+        // TODO Add tracer to override value of Return5 call
+
         let custom_tracer = CallTracer::new(call_tracer_result.clone()).into_tracer_pointer();
 
         let tx_result = vm.inspect(custom_tracer.into(), VmExecutionMode::OneTx);
